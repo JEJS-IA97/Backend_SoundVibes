@@ -17,15 +17,28 @@ const createPost = async (req, res) => {
 
 const getAllPosts = async (req, res) => {
   try {
+    const { page, limit } = req.params;
+    const offset = (page - 1) * limit;
+
     const postsPaginate = await Post.findAndCountAll({
-      where: { status: 'A' },
-      include: 'User',
+      where: { status: 'A' }, 
+      include: [{ model: User, as: 'user' }], 
       order: [['createdAt', 'DESC']],
-      limit: parseInt(req.params.limit),
-      offset: (parseInt(req.params.page) - 1) * parseInt(req.params.limit)
+      offset: offset, 
+      limit: parseInt(limit) 
     });
 
-    resp.makeResponsesOkData(res, postsPaginate, "PGetAll");
+    const response = {
+      docs: postsPaginate.rows, 
+      totalDocs: postsPaginate.count,
+      page: parseInt(page), 
+      limit: parseInt(limit), 
+      totalPages: Math.ceil(postsPaginate.count / limit), 
+      hasPrevPage: offset > 0, 
+      hasNextPage: offset + parseInt(limit) < postsPaginate.count
+    };
+
+    resp.makeResponsesOkData(res, response, "PGetAll");
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
@@ -33,15 +46,35 @@ const getAllPosts = async (req, res) => {
 
 const getPostByUser = async (req, res) => {
   try {
-    const postsPaginate = await Post.findAndCountAll({
-      where: { user: req.params.id, status: 'A' },
-      include: 'User',
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(req.params.limit),
-      offset: (parseInt(req.params.page) - 1) * parseInt(req.params.limit)
+    const userId = req.params.id;
+    const page = parseInt(req.params.page);
+    const limit = parseInt(req.params.limit);
+
+    const posts = await Post.findAndCountAll({
+      where: {
+        userId, 
+        status: 'A'
+      },
+      include: [
+        {
+          model: User, 
+          attributes: ['id', 'username'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']], 
+      limit, 
+      offset: (page - 1) * limit 
     });
 
-    resp.makeResponsesOkData(res, postsPaginate, "PGetByUser");
+    const responseData = {
+      posts: posts.rows,
+      totalPosts: posts.count,
+      currentPage: page,
+      totalPages: Math.ceil(posts.count / limit)
+    };
+
+    resp.makeResponsesOkData(res, responseData, "PGetByUser");
+
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
@@ -49,12 +82,28 @@ const getPostByUser = async (req, res) => {
 
 const getPostById = async (req, res) => {
   try {
+    const postId = req.params.id;
+
     const post = await Post.findOne({
-      where: { id: req.params.id, status: 'A' },
-      include: 'User'
+      where: {
+        id: postId, 
+        status: 'A' 
+      },
+      include: [
+        {
+          model: User, 
+          attributes: ['id', 'username'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']] 
     });
 
+    if (!post) {
+      return resp.makeResponsesError(res, { message: 'Post not found' }, 404);
+    }
+
     resp.makeResponsesOkData(res, post, "PGetById");
+
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
@@ -62,15 +111,34 @@ const getPostById = async (req, res) => {
 
 const getFeedPosts = async (req, res) => {
   try {
-    const postsPaginate = await Post.findAndCountAll({
-      where: { user: req.body, status: 'A' },
-      include: 'User',
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(req.params.limit),
-      offset: (parseInt(req.params.page) - 1) * parseInt(req.params.limit)
+    const { page, limit } = req.params;
+    const userIds = req.body;
+
+    const posts = await Post.findAndCountAll({
+      where: {
+        userId: userIds, 
+        status: 'A' 
+      },
+      include: [
+        {
+          model: User, 
+          attributes: ['id', 'username'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']], 
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit) 
     });
 
-    resp.makeResponsesOkData(res, postsPaginate, "PGetPosts");
+    const responseData = {
+      posts: posts.rows,
+      totalPosts: posts.count,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(posts.count / parseInt(limit))
+    };
+
+    resp.makeResponsesOkData(res, responseData, "PGetPosts");
+
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
@@ -90,7 +158,7 @@ const uploadImage = async (req, res) => {
     }
 
     const filename = file?.filename;
-    const basePath = `${req.protocol}://${req.get('host')}/flymagine/public/images/`;
+    const basePath = `${req.protocol}://${req.get('host')}`;
 
     await Post.update({ photo: `${basePath}${filename}` }, { where: { id: req.params.id, status: 'A' } });
 

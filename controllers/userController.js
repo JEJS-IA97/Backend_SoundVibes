@@ -84,6 +84,142 @@ const getAllUsers = async (req, res) => {
   }
 }
 
+const getUser = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findByPk(id, {
+      where: {
+        status: 'A'
+      }
+    });
+    response.makeResponsesOkData(res, user, 'Success')
+  } catch (error) {
+    response.makeResponsesError(res, error, 'UnexpectedError')
+  }
+}
+const getUserProfileImage = async (req, res) => {
+  try {
+    const user_id = req.params.id;
+    const user = await User.findByPk(user_id);
+  
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${user_id} not found`, 'UserNotFound');
+    }
+  
+    const profileImageURL = user.profile;
+    resp.makeResponsesOkData(res, { profileImageURL }, 'UserProfileImageRetrieved');
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError');
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const userData = req.body;
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User doesn't exist`, 'UNotFound');
+    }
+
+    await user.update(userData);
+
+    resp.makeResponsesOkData(res, user, 'UUpdated');
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError');
+  }
+};
+
+const updateUserImage = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { imageUrl } = req.body;
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User doesn't exist`, 'UNotFound');
+    }
+
+    user.profile = imageUrl; 
+    await user.save();
+
+    resp.makeResponsesOkData(res, user, 'User image updated successfully');
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError');
+  }
+};
+const deleteUser = async (req, res) => {
+
+  try {
+
+    const id = req.params.id;
+
+    const user = await User.findByPk(id, {
+      where: {
+        status: 'A'
+      }
+    });
+
+    if (!user) {
+      return response.makeResponsesError(res, `User doesn't exist`, 'UNotFound')
+    }
+
+    const saveUser = await user.update({
+      status: false,
+      deleted_at: Date.now(),
+      where: { id }
+    });
+
+    response.makeResponsesOkData(res, saveUser, 'UDeleted')
+
+
+  } catch (error) {
+    response.makeResponsesError(res, error, 'UnexpectedError')
+
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+
+    const user = await User.findByPk(req.params.id, {
+      where: {
+        status: 'A'
+      }
+    });
+
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User don't exist`, 'UNotFound')
+    }
+
+    const valPass = await validate.comparePassword(req.body.password, valUser.password)
+
+    if (!valPass) {
+      return resp.makeResponsesError(res, 'Incorrect credentials', 'UChangePasswordError')
+    }
+
+    const valNewPass = await validate.comparePassword(req.body.newPassword, valUser.password)
+
+    if (valNewPass) {
+      return resp.makeResponsesError(res, 'Incorrect credentials', 'UChangePasswordError1')
+    }
+
+
+    user.password = bcrypt.hashSync(req.body.newPassword) ? bcrypt.hashSync(req.body.newPassword) : user.password
+
+    await user.save()
+
+    resp.makeResponsesOkData(res, saveUser, 'UChangePasswordSuccess')
+
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError')
+  }
+}
+
 const setFavorite = async (req, res) => {
   try {
     const { user_id , post_id } = req.body;
@@ -139,5 +275,11 @@ module.exports = {
   setFavorite,
   getFavoritesByUser,
   setFollow,
-  getFollowersByUser
+  getFollowersByUser,
+  getUser,
+  updateUser,
+  deleteUser,
+  changePassword,
+  updateUserImage,
+  getUserProfileImage
 };
