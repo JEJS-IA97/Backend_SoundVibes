@@ -10,6 +10,10 @@ app.use(cors({ origin: 'http://localhost:8001' }));
 app.use(express.json());
 app.use("/api", routes);
 
+app.get("/api", (_, res) =>
+  res.send(`Connected!`)
+)
+
 const port = 4000;
 
 app.listen(port, () => console.log(`API is running on port ${port}`));

@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken')
 const { User } = require('../models');
 const resp = require('../utils/responses')
 const validate = require('../utils/validate')
+const authenticateToken = require('../middlewares/authenticateToken');
+
 
 const createUser = async (req, res) => {
   try {
@@ -40,13 +42,20 @@ const createUser = async (req, res) => {
 const login = async (req, res) => {
   try {
 
-    const { username, password } = req.body
+    console.log("Service login")
+    const { username, password } = req.body;
 
-    const valUser = await User.findOne({ username })
+    const valUser = await User.findOne({
+      where: {
+        username
+      }
+    });
 
     if (!valUser) {
       return resp.makeResponsesError(res, 'Incorrect credentials', 'ULoginError1')
     }
+
+    const { id } = valUser;
 
     const valPass = await validate.comparePassword(password, valUser.password)
 
@@ -55,11 +64,11 @@ const login = async (req, res) => {
     }
 
     const secret = process.env.SECRET_KEY
-    const token = jwt.sign({ id: valUser._id, }, secret, { expiresIn: '1w' })
+    const token = jwt.sign({ id, }, secret, { expiresIn: '1w' });
 
     const user = {
-      id: valUser._id,
-      token: token
+      id,
+      token
     }
 
     resp.makeResponsesOkData(res, user, 'Success')
@@ -84,6 +93,24 @@ const getAllUsers = async (req, res) => {
   }
 }
 
+const getUserLogged = async (req, res) => {
+  try {
+    const auth = await authenticateToken(req, res)
+
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    resp.makeResponsesOkData(res, user, 'UserProfileImageRetrieved');
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError');
+  }
+}
+
 const getUser = async (req, res) => {
   try {
     const id = req.params.id;
@@ -92,22 +119,25 @@ const getUser = async (req, res) => {
         status: 'A'
       }
     });
-    response.makeResponsesOkData(res, user, 'Success')
+    resp.makeResponsesOkData(res, user, 'Success')
   } catch (error) {
-    response.makeResponsesError(res, error, 'UnexpectedError')
+    resp.makeResponsesError(res, error, 'UnexpectedError')
   }
 }
+
 const getUserProfileImage = async (req, res) => {
   try {
-    const user_id = req.params.id;
-    const user = await User.findByPk(user_id);
-  
+    const auth = await authenticateToken(req, res)
+
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
     if (!user) {
-      return resp.makeResponsesError(res, `User with ID ${user_id} not found`, 'UserNotFound');
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
     }
-  
-    const profileImageURL = user.profile;
-    resp.makeResponsesOkData(res, { profileImageURL }, 'UserProfileImageRetrieved');
+
+    resp.makeResponsesOkData(res, { profileImage: user.profile }, 'UserProfileImageRetrieved');
   } catch (error) {
     resp.makeResponsesError(res, error, 'UnexpectedError');
   }
@@ -134,16 +164,23 @@ const updateUser = async (req, res) => {
 
 const updateUserImage = async (req, res) => {
   try {
-    const userId = req.params.id;
-    const { imageUrl } = req.body;
+    const auth = await authenticateToken(req, res)
 
-    const user = await User.findByPk(userId);
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
 
     if (!user) {
-      return resp.makeResponsesError(res, `User doesn't exist`, 'UNotFound');
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
     }
 
-    user.profile = imageUrl; 
+    const { imageUrl } = req.body;
+
+    if (!imageUrl) {
+      return resp.makeResponsesError(res, `Image doesn't exist.`, 'UserNotFound');
+    }
+
+    user.profile = imageUrl;
     await user.save();
 
     resp.makeResponsesOkData(res, user, 'User image updated successfully');
@@ -222,9 +259,9 @@ const changePassword = async (req, res) => {
 
 const setFavorite = async (req, res) => {
   try {
-    const { user_id , post_id } = req.body;
+    const { user_id, post_id } = req.body;
 
-    const favorite = await Favorite.create({ user_id , post_id });
+    const favorite = await Favorite.create({ user_id, post_id });
 
     resp.makeResponsesOkData(res, favorite, 'FavoriteCreated');
   } catch (error) {
@@ -234,7 +271,7 @@ const setFavorite = async (req, res) => {
 
 const getFavoritesByUser = async (req, res) => {
   try {
-    const user_id  = req.params.userId;
+    const user_id = req.params.userId;
 
     const favorites = await Favorite.findAll({ where: { user_id } });
 
@@ -281,5 +318,6 @@ module.exports = {
   deleteUser,
   changePassword,
   updateUserImage,
-  getUserProfileImage
+  getUserProfileImage,
+  getUserLogged,
 };
