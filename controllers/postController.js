@@ -54,25 +54,35 @@ const getAllPosts = async (req, res) => {
       order: [['updatedAt', 'DESC']]
     });
 
-    const likesPromises = posts.map(post => {
-      return LikePost.findAndCountAll({
+    const likesPromises = posts.map(async post => {
+
+      const { id, User, descripcion, title, year, gender, link_spotify, link_youtube, link_soundcloud, image, createdAt, updatedAt } = post;
+
+
+      const { count, rows } = await LikePost.findAndCountAll({
         where: {
-          post_id: post.id
+          post_id: id
         }
       });
-    });
 
-    const likesData = await Promise.all(likesPromises);
-
-    const respPost = posts.map((post, index) => {
-      const { count } = likesData[index];
       return {
-        ...post,
-        likes: count
+        id,
+        User,
+        description: descripcion,
+        title,
+        year,
+        gender,
+        link_spotify,
+        link_youtube,
+        link_soundcloud,
+        image,
+        likes: count,
+        createdAt,
+        updatedAt,
       };
     });
 
-    console.log(respPost);
+    const respPost = await Promise.all(likesPromises);
 
     resp.makeResponsesOkData(res, respPost, 'Success')
 
@@ -105,12 +115,49 @@ const getFeed = async (req, res) => {
     const posts = await Post.findAll({
       where: {
         user_id: [...followsId, user.id],
-        deleteAt: null
+        deletedAt: null
       },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'username']
+        }
+      ],
       order: [['updatedAt', 'DESC']]
     });
+    
+    const likesPromises = posts.map(async post => {
 
-    resp.makeResponsesOkData(res, posts, 'Success')
+      const { id, User, descripcion, title, year, gender, link_spotify, link_youtube, link_soundcloud, image, createdAt, updatedAt } = post;
+
+
+      const { count, rows } = await LikePost.findAndCountAll({
+        where: {
+          post_id: id
+        }
+      });
+
+      return {
+        id,
+        User,
+        description: descripcion,
+        title,
+        year,
+        gender,
+        link_spotify,
+        link_youtube,
+        link_soundcloud,
+        image,
+        likes: count,
+        isLiked: rows.find(item => item.user_id === user.id) ? true : false,
+        createdAt,
+        updatedAt,
+      };
+    });
+
+    const respPost = await Promise.all(likesPromises);
+
+    resp.makeResponsesOkData(res, respPost, 'Success')
 
   } catch (error) {
     resp.makeResponsesError(res, error, 'UnexpectedError')
