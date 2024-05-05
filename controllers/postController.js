@@ -1,58 +1,52 @@
 const resp = require('../utils/responses');
-const { Post, LikePost, UserTag, PostTag } = require('../models');
+const { Post, LikePost, UserTag, PostTag, User } = require('../models');
 
 const createPost = async (req, res) => {
   try {
-    const { user, description } = req.body;
+    const { user_id, description, title, year, gender, spotify, youtube, soundcloud } = req.body
 
-    const post = await Post.create({ user, description });
+    const post = new Post({
+      user_id,
+      description,
+      title,
+      year,
+      gender,
+      spotify,
+      youtube,
+      soundcloud,
+      image,
+    })
 
-    const postPopulate = await Post.findOne({ where: { id: post.id }, include: 'User' });
+    await post.save()
 
-    resp.makeResponsesOkData(res, postPopulate, "PCreated");
+    resp.makeResponsesOkData(res, { user_id, description, title, year, gender, spotify, youtube, soundcloud, image }, 'PCreated')
+
   } catch (error) {
-    resp.makeResponsesError(res, error);
+    console.log(error);
+    resp.makeResponsesError(res, error)
   }
-};
+}
 
 const getAllPosts = async (req, res) => {
   try {
-    const { page, limit } = req.params;
-    const offset = (page - 1) * limit;
-
-    const postsPaginate = await Post.findAndCountAll({
-      where: { status: 'A' }, 
-      include: [{ model: User, as: 'user' }], 
-      order: [['createdAt', 'DESC']],
-      offset: offset, 
-      limit: parseInt(limit) 
+    const posts = await Post.findAll({
+      order: [['createdAt', 'DESC']]
     });
 
-    const response = {
-      docs: postsPaginate.rows, 
-      totalDocs: postsPaginate.count,
-      page: parseInt(page), 
-      limit: parseInt(limit), 
-      totalPages: Math.ceil(postsPaginate.count / limit), 
-      hasPrevPage: offset > 0, 
-      hasNextPage: offset + parseInt(limit) < postsPaginate.count
-    };
+    resp.makeResponsesOkData(res, posts, 'Success')
 
-    resp.makeResponsesOkData(res, response, "PGetAll");
   } catch (error) {
-    resp.makeResponsesError(res, error);
+    resp.makeResponsesError(res, error, 'UnexpectedError')
   }
 };
 
 const getPostByUser = async (req, res) => {
   try {
-    const userId = req.params.id;
-    const page = parseInt(req.params.page);
-    const limit = parseInt(req.params.limit);
+    const user_id = req.params.id;
 
     const posts = await Post.findAndCountAll({
       where: {
-        userId, 
+        user_id, 
         status: 'A'
       },
       include: [
@@ -61,21 +55,13 @@ const getPostByUser = async (req, res) => {
           attributes: ['id', 'username'] 
         }
       ],
-      order: [['createdAt', 'DESC']], 
-      limit, 
-      offset: (page - 1) * limit 
+      order: [['createdAt', 'DESC']]
     });
 
-    const responseData = {
-      posts: posts.rows,
-      totalPosts: posts.count,
-      currentPage: page,
-      totalPages: Math.ceil(posts.count / limit)
-    };
-
-    resp.makeResponsesOkData(res, responseData, "PGetByUser");
+    resp.makeResponsesOkData(res, posts, "PGetByUser");
 
   } catch (error) {
+    console.log(error);
     resp.makeResponsesError(res, error);
   }
 };
@@ -102,67 +88,8 @@ const getPostById = async (req, res) => {
       return resp.makeResponsesError(res, { message: 'Post not found' }, 404);
     }
 
-    resp.makeResponsesOkData(res, post, "PGetById");
+    resp.makeResponsesOkData(res, post, "Success");
 
-  } catch (error) {
-    resp.makeResponsesError(res, error);
-  }
-};
-
-const getFeedPosts = async (req, res) => {
-  try {
-    const { page, limit } = req.params;
-    const userIds = req.body;
-
-    const posts = await Post.findAndCountAll({
-      where: {
-        userId: userIds, 
-        status: 'A' 
-      },
-      include: [
-        {
-          model: User, 
-          attributes: ['id', 'username'] 
-        }
-      ],
-      order: [['createdAt', 'DESC']], 
-      limit: parseInt(limit),
-      offset: (parseInt(page) - 1) * parseInt(limit) 
-    });
-
-    const responseData = {
-      posts: posts.rows,
-      totalPosts: posts.count,
-      currentPage: parseInt(page),
-      totalPages: Math.ceil(posts.count / parseInt(limit))
-    };
-
-    resp.makeResponsesOkData(res, responseData, "PGetPosts");
-
-  } catch (error) {
-    resp.makeResponsesError(res, error);
-  }
-};
-
-const uploadImage = async (req, res) => {
-  try {
-    const post = await Post.findOne({ where: { id: req.params.id, status: 'A' } });
-
-    if (!post) {
-      return resp.makeResponsesError(res, "UNotFound");
-    }
-
-    const file = req?.file;
-    if (!file) {
-      return resp.makeResponsesError(res, "UImageError");
-    }
-
-    const filename = file?.filename;
-    const basePath = `${req.protocol}://${req.get('host')}`;
-
-    await Post.update({ photo: `${basePath}${filename}` }, { where: { id: req.params.id, status: 'A' } });
-
-    resp.makeResponsesOkData(res, "PUpdated");
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
@@ -171,42 +98,74 @@ const uploadImage = async (req, res) => {
 const updatePost = async (req, res) => {
   try {
     const { description } = req.body;
+    const postId = req.params.id;
 
-    await Post.update({ description }, { where: { id: req.params.id, status: 'A' } });
+    const updatedPost = await Post.update(
+      { description },
+      {
+        where: {
+          id: postId,
+          status: 'A' 
+        }
+      }
+    );
 
-    resp.makeResponsesOkData(res, "PUpdated");
+    resp.makeResponsesOkData(res, updatedPost, "Success");
+
   } catch (error) {
+    console.log(error);
     resp.makeResponsesError(res, error);
+  }
+};
+
+const updatePostImage = async (req, res) => {
+  try {
+    const post_id = req.params.id; 
+    const post = await Post.findByPk(post_id);
+
+    if (!post) {
+      return resp.makeResponsesError(res, `Post with ID ${post_id} not found`, 'PostNotFound');
+    }
+
+    const { imageUrl } = req.body; 
+    console.log("Imagen recibida:", imageUrl);
+
+    if (!imageUrl) {
+      return resp.makeResponsesError(res, 'Image file is missing.', 'ImageNotFound');
+    }
+
+    post.image = imageUrl;
+    await post.save();
+
+    resp.makeResponsesOkData(res, post, 'Post image updated successfully');
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError');
   }
 };
 
 const deletePost = async (req, res) => {
   try {
-    await Post.update({ status: 'I', deletedAt: new Date() }, { where: { id: req.params.id, status: 'A' } });
+    const postId = req.params.id;
 
-    resp.makeResponsesOkData(res, "PDeleted");
+    const deletedPost = await Post.update(
+      { status: 'I', deletedAt: new Date() },
+      {
+        where: {
+          id: postId,
+          status: 'A' 
+        }
+      }
+    );
+
+    resp.makeResponsesOkData(res, deletedPost, "PDeleted");
+
   } catch (error) {
+    console.log(error);
     resp.makeResponsesError(res, error);
   }
 };
 
-const getPostByHashtags = async (req, res) => {
-  try {
-    const postsPaginate = await PostTag.findAndCountAll({
-      where: { hashtags: req.body, status: 'A' },
-      include: [
-        { model: Post, as: 'Post', include: 'User' }
-      ],
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(req.params.limit),
-      offset: (parseInt(req.params.page) - 1) * parseInt(req.params.limit)
-    });
-
-    resp.makeResponsesOkData(res, postsPaginate, "PGetByHashtags");
-  } catch (error) {
-    resp.makeResponsesError(res, error);
-  }
-};
+// User tag & Hashtag
 
 const setUserTag = async (req, res) => {
   try {
@@ -214,28 +173,36 @@ const setUserTag = async (req, res) => {
 
     if (!post) {
       return resp.makeResponsesError(res, "PNotFound");
-    }
-
-    const existingUserTag = await UserTag.findOne({ where: { post: req.params.id } });
-
-    if (existingUserTag) {
-      await UserTag.update({ users: req.body }, { where: { post: req.params.id } });
-      resp.makeResponsesOkData(res, "Success");
     } else {
-      await UserTag.create({ post: req.params.id, users: req.body });
-      resp.makeResponsesOkData(res, "Success");
+      const userTag = await UserTag.findOne({ where: { post_id: req.params.id } });
+
+      if (userTag) {
+        await UserTag.update({ users: req.body }, { where: { post_id: req.params.id } });
+
+        const updatedUserTag = await UserTag.findOne({ where: { post_id: req.params.id } });
+        
+        resp.makeResponsesOkData(res, updatedUserTag, "Success");
+      } else {
+        const newUserTag = await UserTag.create({
+          post_id: req.params.id,
+          users: req.body
+        });
+
+        resp.makeResponsesOkData(res, newUserTag, "Success");
+      }
     }
   } catch (error) {
+    console.log(error);
     resp.makeResponsesError(res, error);
   }
-};
+}
 
 const getUserTagByPost = async (req, res) => {
   try {
     const usertags = await UserTag.findAll({
-      where: { post: req.params.id }
+      where: { post_id: req.params.id },
+      include: [{ model: User, as: 'users' }]
     });
-
     resp.makeResponsesOkData(res, usertags, "Success");
   } catch (error) {
     resp.makeResponsesError(res, error);
@@ -244,34 +211,30 @@ const getUserTagByPost = async (req, res) => {
 
 const setHashtagTag = async (req, res) => {
   try {
+    // Buscar la publicación por ID y estado activo ('A')
     const post = await Post.findOne({ where: { id: req.params.id, status: 'A' } });
 
     if (!post) {
       return resp.makeResponsesError(res, "PNotFound");
-    }
-
-    const existingPostTag = await PostTag.findOne({ where: { post: req.params.id } });
-
-    if (existingPostTag) {
-      await PostTag.update({ hashtags: req.body }, { where: { post: req.params.id } });
-      resp.makeResponsesOkData(res, "Success");
     } else {
-      await PostTag.create({ post: req.params.id, hashtags: req.body });
-      resp.makeResponsesOkData(res, "Success");
+      // Verificar si ya existe un registro de etiquetas para esta publicación
+      const existingPostTag = await PostTag.findOne({ where: { post_id: req.params.id } });
+
+      if (existingPostTag) {
+        // Actualizar las etiquetas de la publicación existente
+        const updatePostTags = await PostTag.update({ hashtags: req.body }, { where: { post_id: req.params.id } });
+        resp.makeResponsesOkData(res, updatePostTags, "Success");
+      } else {
+        // Crear un nuevo registro de etiquetas para la publicación
+        const hashtagTag = await PostTag.create({
+          post_id: req.params.id,
+          hashtags: req.body,
+        });
+        resp.makeResponsesOkData(res, hashtagTag, "Success");
+      }
     }
   } catch (error) {
-    resp.makeResponsesError(res, error);
-  }
-};
-
-const getHashtagTagByPost = async (req, res) => {
-  try {
-    const hashtags = await PostTag.findAll({
-      where: { post: req.params.id }
-    });
-
-    resp.makeResponsesOkData(res, hashtags, "Success");
-  } catch (error) {
+    console.log(error)
     resp.makeResponsesError(res, error);
   }
 };
@@ -315,12 +278,10 @@ module.exports = {
   getAllPosts,
   getPostByUser,
   getPostById,
-  getFeedPosts,
-  uploadImage,
+  updatePostImage,
   updatePost,
   deletePost,
 
-  getPostByHashtags,
 
   setLikePost,
   getLikePost,
@@ -329,5 +290,4 @@ module.exports = {
   getUserTagByPost,
 
   setHashtagTag,
-  getHashtagTagByPost,
 };
