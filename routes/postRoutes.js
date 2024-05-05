@@ -4,8 +4,6 @@ const postController = require('../controllers/postController');
 
 router.post('/create', postController.createPost);
 router.get('/all', postController.getAllPosts);
-router.get('/feed', postController.getFeedPosts);
-router.post('/hashtags', postController.getPostByHashtags);
 
 router.get('/user/:id', postController.getPostByUser);
 router.get('/:id', postController.getPostById);
@@ -22,6 +20,5 @@ router.post('/user-tag/:id', postController.setUserTag);
 router.get('/user-tag/:id', postController.getUserTagByPost);
 
 router.post('/hashtag-tag/:id', postController.setHashtagTag);
-router.get('/hashtag-tag/:id', postController.getHashtagTagByPost);
 
 module.exports = router;
