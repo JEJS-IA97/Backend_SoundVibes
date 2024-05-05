@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const { User } = require('../models');
+const { User, Follow } = require('../models');
 const resp = require('../utils/responses')
 const validate = require('../utils/validate')
 const authenticateToken = require('../middlewares/authenticateToken');
@@ -283,9 +283,20 @@ const getFavoritesByUser = async (req, res) => {
 
 const setFollow = async (req, res) => {
   try {
-    const { follower_id, following_id } = req.body;
+    
+    const auth = await authenticateToken(req, res)
 
-    const follow = await Follow.create({ follower_id, following_id });
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    const { followingId } = req.body;
+
+    const follow = await Follow.create({ user_id: user.id, follower_id: followingId });
 
     resp.makeResponsesOkData(res, follow, 'FollowCreated');
   } catch (error) {

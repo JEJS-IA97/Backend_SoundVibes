@@ -1,25 +1,37 @@
 const resp = require('../utils/responses');
-const { Post, LikePost, UserTag, PostTag, User } = require('../models');
+const { Post, LikePost, UserTag, PostTag, User, Follow } = require('../models');
+const authenticateToken = require('../middlewares/authenticateToken');
 
 const createPost = async (req, res) => {
   try {
-    const { user_id, description, title, year, gender, spotify, youtube, soundcloud } = req.body
+
+    const auth = await authenticateToken(req, res)
+
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    const { description, title, year, image, gender, link_spotify, link_youtube, link_soundcloud } = req.body
 
     const post = new Post({
-      user_id,
-      description,
+      user_id: user.id,
+      descripcion: description,
       title,
       year,
       gender,
-      spotify,
-      youtube,
-      soundcloud,
+      link_spotify,
+      link_youtube,
+      link_soundcloud,
       image,
     })
 
     await post.save()
 
-    resp.makeResponsesOkData(res, { user_id, description, title, year, gender, spotify, youtube, soundcloud, image }, 'PCreated')
+    resp.makeResponsesOkData(res, { id: post.id, user_id: user.id, description, title, year, gender, link_spotify, link_youtube, link_soundcloud, image }, 'PCreated')
 
   } catch (error) {
     console.log(error);
@@ -30,7 +42,72 @@ const createPost = async (req, res) => {
 const getAllPosts = async (req, res) => {
   try {
     const posts = await Post.findAll({
-      order: [['createdAt', 'DESC']]
+      where: {
+        deletedAt: null
+      },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'username']
+        }
+      ],
+      order: [['updatedAt', 'DESC']]
+    });
+
+    const likesPromises = posts.map(post => {
+      return LikePost.findAndCountAll({
+        where: {
+          post_id: post.id
+        }
+      });
+    });
+
+    const likesData = await Promise.all(likesPromises);
+
+    const respPost = posts.map((post, index) => {
+      const { count } = likesData[index];
+      return {
+        ...post,
+        likes: count
+      };
+    });
+
+    console.log(respPost);
+
+    resp.makeResponsesOkData(res, respPost, 'Success')
+
+  } catch (error) {
+    resp.makeResponsesError(res, error, 'UnexpectedError')
+  }
+};
+
+const getFeed = async (req, res) => {
+  try {
+
+    const auth = await authenticateToken(req, res)
+
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    const follows = await Follow.findAll({
+      where: {
+        user_id: user.id
+      }
+    });
+
+    const followsId = follows.map(follow => follow.follower_id);
+
+    const posts = await Post.findAll({
+      where: {
+        user_id: [...followsId, user.id],
+        deleteAt: null
+      },
+      order: [['updatedAt', 'DESC']]
     });
 
     resp.makeResponsesOkData(res, posts, 'Success')
@@ -46,16 +123,16 @@ const getPostByUser = async (req, res) => {
 
     const posts = await Post.findAndCountAll({
       where: {
-        user_id, 
+        user_id,
         status: 'A'
       },
       include: [
         {
-          model: User, 
-          attributes: ['id', 'username'] 
+          model: User,
+          attributes: ['id', 'username']
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['updated', 'DESC']]
     });
 
     resp.makeResponsesOkData(res, posts, "PGetByUser");
@@ -72,16 +149,16 @@ const getPostById = async (req, res) => {
 
     const post = await Post.findOne({
       where: {
-        id: postId, 
-        status: 'A' 
+        id: postId,
+        deletedAt: null
       },
       include: [
         {
-          model: User, 
-          attributes: ['id', 'username'] 
+          model: User,
+          attributes: ['id', 'username']
         }
       ],
-      order: [['createdAt', 'DESC']] 
+      order: [['updatedAt', 'DESC']]
     });
 
     if (!post) {
@@ -105,7 +182,7 @@ const updatePost = async (req, res) => {
       {
         where: {
           id: postId,
-          status: 'A' 
+          status: 'A'
         }
       }
     );
@@ -120,14 +197,14 @@ const updatePost = async (req, res) => {
 
 const updatePostImage = async (req, res) => {
   try {
-    const post_id = req.params.id; 
+    const post_id = req.params.id;
     const post = await Post.findByPk(post_id);
 
     if (!post) {
       return resp.makeResponsesError(res, `Post with ID ${post_id} not found`, 'PostNotFound');
     }
 
-    const { imageUrl } = req.body; 
+    const { imageUrl } = req.body;
     console.log("Imagen recibida:", imageUrl);
 
     if (!imageUrl) {
@@ -152,7 +229,7 @@ const deletePost = async (req, res) => {
       {
         where: {
           id: postId,
-          status: 'A' 
+          status: 'A'
         }
       }
     );
@@ -180,7 +257,7 @@ const setUserTag = async (req, res) => {
         await UserTag.update({ users: req.body }, { where: { post_id: req.params.id } });
 
         const updatedUserTag = await UserTag.findOne({ where: { post_id: req.params.id } });
-        
+
         resp.makeResponsesOkData(res, updatedUserTag, "Success");
       } else {
         const newUserTag = await UserTag.create({
@@ -241,19 +318,38 @@ const setHashtagTag = async (req, res) => {
 
 const setLikePost = async (req, res) => {
   try {
-    const post = await Post.findOne({ where: { id: req.params.id, status: 'A' } });
+
+    const auth = await authenticateToken(req, res)
+
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    const post = await Post.findOne({ where: { id: req.params.id, deletedAt: null } });
 
     if (!post) {
       return resp.makeResponsesError(res, "PNotFound");
     }
 
-    const existingLike = await LikePost.findOne({ where: { post: req.params.id } });
+    const { id } = req.params;
+
+    const existingLike = await LikePost.findOne({
+      where: {
+        post_id: id,
+        user_id: user.id
+      }
+    });
 
     if (existingLike) {
-      await LikePost.update({ users: req.body }, { where: { post: req.params.id } });
+      existingLike.deletedAt = new Date();
+      await existingLike.save();
       resp.makeResponsesOkData(res, "Success");
     } else {
-      await LikePost.create({ post: req.params.id, users: req.body });
+      await LikePost.create({ post_id: id, user_id: user.id });
       resp.makeResponsesOkData(res, "LikeCreated");
     }
   } catch (error) {
@@ -282,6 +378,7 @@ module.exports = {
   updatePost,
   deletePost,
 
+  getFeed,
 
   setLikePost,
   getLikePost,

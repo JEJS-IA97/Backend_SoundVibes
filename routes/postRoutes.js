@@ -5,6 +5,8 @@ const postController = require('../controllers/postController');
 router.post('/create', postController.createPost);
 router.get('/all', postController.getAllPosts);
 
+router.get("/feed", postController.getFeed);
+
 router.get('/user/:id', postController.getPostByUser);
 router.get('/:id', postController.getPostById);
 router.put('/update/image/:id', postController.updatePostImage);

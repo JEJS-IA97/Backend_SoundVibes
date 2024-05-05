@@ -10,12 +10,36 @@ module.exports = (sequelize) => {
     post_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      unique: true,
+      unique: false,
       references: {
         model: 'Post',
         key: 'id'
       }
-    }
+    },
+    user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      unique: false,
+      references: {
+        model: 'User',
+        key: 'id'
+      }
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    }, 
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null
+    },
   }, {
     sequelize,
     modelName: 'LikePost',
