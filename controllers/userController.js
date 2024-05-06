@@ -221,41 +221,38 @@ const deleteUser = async (req, res) => {
 
 const changePassword = async (req, res) => {
   try {
-
     const user = await User.findByPk(req.params.id, {
       where: {
         status: 'A'
       }
     });
 
-
     if (!user) {
-      return resp.makeResponsesError(res, `User don't exist`, 'UNotFound')
+      return resp.makeResponsesError(res, `User don't exist`, 'UNotFound');
     }
 
-    const valPass = await validate.comparePassword(req.body.password, valUser.password)
+    const isPasswordValid = await validate.comparePassword(req.body.password, user.password);
 
-    if (!valPass) {
-      return resp.makeResponsesError(res, 'Incorrect credentials', 'UChangePasswordError')
+    if (!isPasswordValid) {
+      return resp.makeResponsesError(res, 'Incorrect credentials', 'UChangePasswordError');
     }
 
-    const valNewPass = await validate.comparePassword(req.body.newPassword, valUser.password)
+    const isNewPasswordValid = await validate.comparePassword(req.body.newPassword, user.password);
 
-    if (valNewPass) {
-      return resp.makeResponsesError(res, 'Incorrect credentials', 'UChangePasswordError1')
+    if (isNewPasswordValid) {
+      return resp.makeResponsesError(res, 'New password must be different from the old one', 'UChangePasswordError1');
     }
 
+    user.password = bcrypt.hashSync(req.body.newPassword) || user.password;
 
-    user.password = bcrypt.hashSync(req.body.newPassword) ? bcrypt.hashSync(req.body.newPassword) : user.password
+    await user.save();
 
-    await user.save()
-
-    resp.makeResponsesOkData(res, saveUser, 'UChangePasswordSuccess')
-
+    resp.makeResponsesOkData(res, user, 'UChangePasswordSuccess');
   } catch (error) {
-    resp.makeResponsesError(res, error, 'UnexpectedError')
+    console.log(error);
+    resp.makeResponsesError(res, error, 'UnexpectedError');
   }
-}
+};
 
 const setFavorite = async (req, res) => {
   try {

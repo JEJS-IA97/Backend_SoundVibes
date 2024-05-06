@@ -8,6 +8,8 @@ router.get('/all', postController.getAllPosts);
 router.get("/feed", postController.getFeed);
 
 router.get('/user/:id', postController.getPostByUser);
+router.get("/user", postController.getPostByUserLogged);
+
 router.get('/:id', postController.getPostById);
 router.put('/update/image/:id', postController.updatePostImage);
 router.put('/update/:id', postController.updatePost);
@@ -15,11 +17,8 @@ router.delete('/delete/:id', postController.deletePost);
 
 
 
-router.post('/like/:postId', async (req, res) => {
-    const postId = req.params.postId;
-    await postController.setLikePost(req, res, postId);
-  });
-  
+router.post('/like/:postId', postController.setLikePost);
+
 router.get('/like/:id', postController.getLikePost);
 
 router.post('/user-tag/:id', postController.setUserTag);
