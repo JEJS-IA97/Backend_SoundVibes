@@ -15,7 +15,11 @@ router.delete('/delete/:id', postController.deletePost);
 
 
 
-router.post('/like/:id', postController.setLikePost);
+router.post('/like/:postId', async (req, res) => {
+    const postId = req.params.postId;
+    await postController.setLikePost(req, res, postId);
+  });
+  
 router.get('/like/:id', postController.getLikePost);
 
 router.post('/user-tag/:id', postController.setUserTag);

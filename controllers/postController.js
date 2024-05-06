@@ -120,10 +120,10 @@ const getFeed = async (req, res) => {
       include: [
         {
           model: User,
-          attributes: ['id', 'username']
+          attributes: ['id', 'username', 'profile']
         }
       ],
-      order: [['updatedAt', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
     
     const likesPromises = posts.map(async post => {
@@ -363,30 +363,25 @@ const setHashtagTag = async (req, res) => {
   }
 };
 
-const setLikePost = async (req, res) => {
+const setLikePost = async (req, res, postId) => {
   try {
-
-    const auth = await authenticateToken(req, res)
-
+    const auth = await authenticateToken(req, res);
     if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
 
     const user = await User.findByPk(auth.id);
-
     if (!user) {
       return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
     }
 
-    const post = await Post.findOne({ where: { id: req.params.id, deletedAt: null } });
+    const post = await Post.findOne({ where: { id: postId, deletedAt: null } });
 
     if (!post) {
       return resp.makeResponsesError(res, "PNotFound");
     }
 
-    const { id } = req.params;
-
     const existingLike = await LikePost.findOne({
       where: {
-        post_id: id,
+        post_id: postId,
         user_id: user.id
       }
     });
@@ -396,13 +391,14 @@ const setLikePost = async (req, res) => {
       await existingLike.save();
       resp.makeResponsesOkData(res, "Success");
     } else {
-      await LikePost.create({ post_id: id, user_id: user.id });
+      await LikePost.create({ post_id: postId, user_id: user.id });
       resp.makeResponsesOkData(res, "LikeCreated");
     }
   } catch (error) {
     resp.makeResponsesError(res, error);
   }
 };
+
 
 const getLikePost = async (req, res) => {
   try {

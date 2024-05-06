@@ -1,13 +1,24 @@
-const { Comment } = require('../models');
+const authenticateToken = require('../middlewares/authenticateToken');
+const { Comment, User } = require('../models');
 const resp = require('../utils/responses');
+
 
 const createComment = async (req, res) => {
   try {
-    const { post_id, user_id, content } = req.body;
+
+    const auth = await authenticateToken(req, res);
+    if (!auth) return resp.makeResponse400(res, 'Unauthorized user.', 'Unauthorized', 401);
+
+    const user = await User.findByPk(auth.id);
+    if (!user) {
+      return resp.makeResponsesError(res, `User with ID ${auth.id} not found`, 'UserNotFound');
+    }
+
+    const { post_id, content } = req.body;
 
     const newComment = await Comment.create({
       post_id,
-      user_id,
+      user_id: user.id,
       content
     });
 
@@ -29,11 +40,43 @@ const getAllComments = async (req, res) => {
 
 const getCommentsByPost = async (req, res) => {
   try {
-    const { post_id } = req.params;
+    const { postId } = req.params;
 
-    const comments = await Comment.findAll({ where: { post_id }, order: [['createdAt', 'DESC']] });
-    resp.makeResponsesOkData(res, comments, 'Success');
+    const comments = await Comment.findAll({ 
+      where: { 
+        post_id: postId 
+      }, 
+      order: [['createdAt', 'DESC']]
+    });
+    
+    const userComments = comments.map(async comment => {
+
+      const { id, content, post_id, user_id, createdAt } = comment;
+      
+      const user = await User.findOne({
+        where: {
+          id: user_id
+        }
+      });
+
+      return {
+        id,
+        post_id,
+        user: {
+          id: user.id,
+          username: user.username,
+          profile: user.profile
+        },
+        content,
+        createdAt,
+      };
+    });
+
+    const respComment = await Promise.all(userComments);
+
+    resp.makeResponsesOkData(res, respComment, 'Success');
   } catch (error) {
+    console.log(error);
     resp.makeResponsesError(res, error, 'UnexpectedError');
   }
 };
